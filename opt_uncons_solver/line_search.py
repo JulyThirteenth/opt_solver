@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Callable
+from typing import Callable, Optional, Tuple
 
 
 def armijo_line_search(
@@ -84,8 +84,7 @@ def lewis_overton_line_search(
     x_k: np.ndarray,
     g_k: np.ndarray,
     s_k: np.ndarray,
-    cost_func: Callable[[np.ndarray], float],
-    grad_func: Callable[[np.ndarray], np.ndarray],
+    value_and_grad: Callable[[np.ndarray], Tuple[float, np.ndarray]],
     alpha_init: float,
     alpha_min: float = 1e-20,
     alpha_max: float = 1e20,
@@ -94,15 +93,15 @@ def lewis_overton_line_search(
     max_iter: int = 64,
     machine_prec: float = 1e-16,
     verbose: bool = False,
-) -> float:
+    f_k: Optional[float] = None,
+) -> Tuple[float, float, np.ndarray]:
     """Performs Lewis-Overton line search to satisfy weak Wolfe conditions.
 
     Args:
         x_k: Current point in parameter space
         g_k: Gradient at current point
         s_k: Search direction
-        cost_func: Objective function to minimize
-        grad_func: Gradient function
+        value_and_grad: Combined objective and gradient function
         alpha_init: Initial step size (must be positive)
         alpha_min: Minimum allowed step size
         alpha_max: Maximum allowed step size
@@ -111,9 +110,13 @@ def lewis_overton_line_search(
         max_iter: Maximum number of line search iterations
         machine_prec: Machine precision threshold for stopping
         verbose: Whether to print debugging information
+        f_k: Optional objective value at x_k
 
     Returns:
-        Step size satisfying weak Wolfe conditions
+        Tuple containing:
+            alpha: Step size satisfying weak Wolfe conditions
+            f_trial: Objective value at x_k + alpha * s_k
+            g_trial: Gradient at x_k + alpha * s_k
 
     Raises:
         ValueError: If parameters violate constraints or line search fails
@@ -143,7 +146,10 @@ def lewis_overton_line_search(
         raise ValueError(f"Search direction not descent (g·s = {dir_deriv_init:.3e})")
 
     # Precompute constants for Wolfe conditions
-    f_init = cost_func(x_k)
+    if f_k is None:
+        f_init, _ = value_and_grad(x_k)
+    else:
+        f_init = f_k
     armijo_bound_coeff = c1 * dir_deriv_init
     curvature_bound = c2 * dir_deriv_init
 
@@ -157,7 +163,9 @@ def lewis_overton_line_search(
     for iter_count in range(1, max_iter + 1):
         # Evaluate trial point
         x_trial = x_k + alpha * s_k
-        f_trial = cost_func(x_trial)
+        f_trial, g_trial = value_and_grad(x_trial)
+        f_trial = float(np.asarray(f_trial))
+        g_trial = np.asarray(g_trial, dtype=float).flatten()
 
         # Check for invalid function values
         if not np.isfinite(f_trial):
@@ -165,8 +173,6 @@ def lewis_overton_line_search(
                 f"Non-finite cost value {f_trial} at alpha = {alpha:.3e}"
             )
 
-        # Calculate gradient at trial point
-        g_trial = np.asarray(grad_func(x_trial), dtype=float).flatten()
         dir_deriv_trial = np.dot(g_trial, s_k)
 
         if verbose:
@@ -189,7 +195,7 @@ def lewis_overton_line_search(
                 alpha_low = alpha
             else:
                 # Both conditions satisfied
-                return alpha
+                return alpha, f_trial, g_trial
 
         # Update alpha based on bracketing status
         if bracketed:

@@ -1,8 +1,7 @@
 import numpy as np
 from copy import copy
-from typing import Union, List, Dict, Callable
+from typing import Union, List, Dict, Callable, Tuple
 from .line_search import lewis_overton_line_search
-from .utils import _plot_convergence
 
 
 def _validate_lbfgs_params(
@@ -50,8 +49,7 @@ def _validate_lbfgs_params(
 
 def practical_lbfgs_optimizer(
     x_init: Union[float, List[float], np.ndarray],
-    cost_func: Callable[[np.ndarray], float],
-    grad_func: Callable[[np.ndarray], np.ndarray],
+    value_and_grad: Callable[[np.ndarray], Tuple[float, np.ndarray]],
     memo_size: int = 8,
     g_epsilon: float = 1e-5,
     past_time: int = 3,
@@ -65,14 +63,13 @@ def practical_lbfgs_optimizer(
     cautious_factor: float = 1e-6,
     machine_prec: float = 1e-16,
     verbose: bool = False,
-    plot_convergence: bool = False,
-) -> Dict[str, Union[str, np.ndarray, List[np.ndarray], List[float]]]:
+    store_history: bool = False,
+) -> Dict[str, Union[str, int, np.ndarray, List[np.ndarray], List[float]]]:
     """Limited-memory BFGS optimization with Lewis-Overton line search.
 
     Args:
         x_init: Initial parameter vector
-        cost_func: Objective function to minimize
-        grad_func: Gradient function
+        value_and_grad: Combined objective and gradient function
         memo_size: Number of previous steps to store for Hessian approximation
         g_epsilon: Gradient norm convergence tolerance
         past_time: Number of past iterations for function value stopping criterion
@@ -86,13 +83,14 @@ def practical_lbfgs_optimizer(
         cautious_factor: Cautious update factor
         machine_prec: Machine precision for numerical stability
         verbose: Whether to print progress information
-        plot_convergence: Whether to plot cost vs iterations
+        store_history: Whether to store full iterate and cost histories
 
     Returns:
         Dictionary containing:
             result: Optimization outcome ("converged", "max_iterations_reached",
                    "line_search_failed", "func_tolerance_reached", or "stationary_point")
             x_opt: Optimized parameters
+            iterations: Number of accepted L-BFGS steps
             trajectory: List of visited parameters
             costs: Cost values at each iteration
     """
@@ -114,14 +112,17 @@ def practical_lbfgs_optimizer(
 
     result_status = "stationary_point"
 
+    def evaluate_value_and_grad(x_eval: np.ndarray) -> Tuple[float, np.ndarray]:
+        f_eval, g_eval = value_and_grad(x_eval)
+        return float(np.asarray(f_eval)), np.asarray(g_eval, dtype=float).flatten()
+
     x = np.atleast_1d(x_init).astype(float)
-    f = cost_func(x)
-    g = np.asarray(grad_func(x), dtype=float).flatten()
+    f, g = evaluate_value_and_grad(x)
     x_prev = np.zeros_like(x)
     g_prev = np.zeros_like(g)
-    # Record xs and costs
-    trajectory = [x.copy()]
-    costs = [f]
+    trajectory = [x.copy()] if store_history else []
+    costs = [f] if store_history else []
+    accepted_iterations = 0
     # Store the initial value of the cost function for stop criterion.
     f_past = np.zeros(max(1, past_time))
     f_past[0] = f
@@ -147,12 +148,11 @@ def practical_lbfgs_optimizer(
             alpha = alpha if alpha < max_alpha else 0.5 * max_alpha
             try:
                 # Perform line search
-                alpha = lewis_overton_line_search(
+                alpha, f, g = lewis_overton_line_search(
                     x_prev,
                     g_prev,
                     d,
-                    cost_func,
-                    grad_func,
+                    value_and_grad,
                     alpha,
                     min_alpha,
                     max_alpha,
@@ -161,6 +161,7 @@ def practical_lbfgs_optimizer(
                     max_linesearch,
                     machine_prec,
                     verbose,
+                    f_k=f,
                 )
             except (ValueError, RuntimeError) as e:
                 result_status = "line_search_failed"
@@ -170,11 +171,10 @@ def practical_lbfgs_optimizer(
                     )
                 break
             x = x_prev + alpha * d
-            f = cost_func(x)
-            g = np.asarray(grad_func(x), dtype=float).flatten()
-            # Record xs and costs
-            trajectory.append(copy(x))
-            costs.append(f)
+            accepted_iterations += 1
+            if store_history:
+                trajectory.append(x.copy())
+                costs.append(f)
             # Convergence test.
             # The criterion is given by the following formula:
             #   ||g(x)||_inf / max(1, ||x||_inf) < g_epsilon
@@ -260,12 +260,10 @@ def practical_lbfgs_optimizer(
             # The search direction d is ready. We try alpha = 1 first.
             alpha = 1.0
 
-    if plot_convergence:
-        _plot_convergence(costs, "LBFGS")
-
     return {
         "result": result_status,
         "x_opt": x,
+        "iterations": accepted_iterations,
         "trajectory": trajectory,
         "costs": costs,
     }

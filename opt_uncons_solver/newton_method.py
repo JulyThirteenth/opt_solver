@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Union, List, Dict, Callable
 from .line_search import armijo_line_search
-from .utils import _plot_convergence
 
 def _validate_optimizer_params(
     beta: float,
@@ -44,7 +43,6 @@ def damped_newton_optimizer(
     lambda_init: float = 1e-3,
     max_regularizations: int = 50,
     verbose: bool = False,
-    plot_convergence: bool = False,
 ) -> Dict[str, Union[str, np.ndarray, List[np.ndarray], List[float]]]:
     """Modified Newton's method with Hessian regularization and Armijo line search.
 
@@ -61,7 +59,6 @@ def damped_newton_optimizer(
         lambda_init: Initial regularization strength
         max_regularizations: Maximum Hessian regularization attempts per iteration
         verbose: Whether to print progress information
-        plot_convergence: Whether to plot cost vs iterations
 
     Returns:
         Dictionary containing:
@@ -158,10 +155,6 @@ def damped_newton_optimizer(
         x_k = x_k + alpha * d_k
         trajectory.append(x_k.copy())
         costs.append(cost_func(x_k))  # Track current cost
-
-    # Plot convergence if requested
-    if plot_convergence:
-        _plot_convergence(costs, "Damped Newton")
 
     # Prepare results
     result = {

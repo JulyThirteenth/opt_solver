@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Union, List, Dict, Callable
 from .line_search import armijo_line_search
-from .utils import _plot_convergence
 
 def _validate_optimizer_params(
     beta: float,
@@ -9,8 +8,6 @@ def _validate_optimizer_params(
     alpha_init: float,
     max_iter: int,
     tol: float,
-    lambda_init: float | None = None,
-    max_regularizations: float | None = None,
 ) -> None:
     """Validates common optimization parameters."""
     if not (0 < beta < 1):
@@ -35,7 +32,6 @@ def gradient_descent_optimizer(
     c: float,
     tol: float,
     verbose: bool = False,
-    plot_convergence: bool = False,
 ) -> Dict[str, Union[str, np.ndarray, List[np.ndarray], List[float]]]:
     """Performs gradient descent optimization with Armijo line search.
 
@@ -49,7 +45,6 @@ def gradient_descent_optimizer(
         c: Armijo condition constant
         tol: Convergence tolerance (gradient norm)
         verbose: Whether to print progress information
-        plot_convergence: Whether to plot cost vs iterations
 
     Returns:
         Dictionary containing:
@@ -108,10 +103,6 @@ def gradient_descent_optimizer(
         x_k = x_k + alpha * d_k
         trajectory.append(x_k.copy())
         costs.append(cost_func(x_k))  # Track current cost
-
-    # Plot convergence if requested
-    if plot_convergence:
-        _plot_convergence(costs, "Gradient Descent")
 
     # Prepare results
     result = {
