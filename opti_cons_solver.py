@@ -1,8 +1,7 @@
-from opti_uncons_solver import practical_lbfgs_optimizer
+from opt_uncons_solver import practical_lbfgs_optimizer
 
 
 import numpy as np
-from scipy.optimize import minimize
 from copy import copy
 from typing import Callable, Tuple
 
