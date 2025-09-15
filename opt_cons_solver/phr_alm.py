@@ -99,7 +99,6 @@ class PHR_ALM_Solver:
         self.aug_lagrangian_value_and_grad = None
 
         # Initialize history
-        self.outer_iter_history = []
         self.inner_iter_history = []
         self.cons_violation_history = []
         self.alm_violation_history = []
@@ -317,9 +316,11 @@ class PHR_ALM_Solver:
         convergence_status = "max_outer_iterations"
         c_eq, c_ieq = self._evaluate_constraint_values(x)
         prev_alm_violation = self._alm_violation_from_values(c_eq, c_ieq)
+        outer_iterations = 0
 
         # Outer loop of ALM
         for outer_iter in range(self.outer_max_iter):
+            outer_iterations = outer_iter + 1
             # Solve inner unconstrained problem
             x = self._solve_inner_problem(x)
 
@@ -330,7 +331,6 @@ class PHR_ALM_Solver:
             self.cons_violation_history.append(cons_violation)
             self.alm_violation_history.append(alm_violation)
             self.mu_history.append(self.mu)
-            self.outer_iter_history.append(outer_iter)
 
             # Check convergence
             if cons_violation < tol:
@@ -366,7 +366,7 @@ class PHR_ALM_Solver:
         solver_info = {
             "status": convergence_status,
             "opti_vars": x,
-            "outer_iterations": len(self.outer_iter_history),
+            "outer_iterations": outer_iterations,
             "inner_iterations": sum(self.inner_iter_history),
             "final_constraint_violation": cons_violation,
             "final_penalty": self.mu,
@@ -411,7 +411,6 @@ class PHR_ALM_Solver:
         self.lambda_eq = np.zeros(self.dim_eq_cons)
         self.lambda_ieq = np.zeros(self.dim_ieq_cons)
         self.mu = self.beta
-        self.outer_iter_history = []
         self.inner_iter_history = []
         self.cons_violation_history = []
         self.alm_violation_history = []
